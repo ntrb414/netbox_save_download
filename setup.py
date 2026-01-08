@@ -7,6 +7,8 @@ setup(
     install_requires=[
         'netmiko',
         'nornir',
+        'nornir_netmiko',
+        'nornir_utils',
     ],
     packages=find_packages(),
     include_package_data=True,

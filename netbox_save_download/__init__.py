@@ -2,13 +2,16 @@ from netbox.plugins import PluginConfig
 
 class SaveDownloadConfig(PluginConfig):
     name = 'netbox_save_download'
-    verbose_name = '设备配置保存和备份下载'
-    description = '在导航栏增加保存和下载设备配置的按钮'
-    version = '0.1'
+    verbose_name = 'NetDevOps 配置备份助手'
+    description = '基于 Nornir 的高并发设备配置保存与备份下载工具'
+    version = '1.0.0'
+    author = 'NetDevOps Team'
     base_url = 'save-download'
     default_settings = {
         'ssh_username': 'admin',
-        'ssh_password': 'password',
+        'ssh_password': 'password123',
+        'backup_path': '/opt/config_download',
+        'threads': 50,
     }
 
 config = SaveDownloadConfig

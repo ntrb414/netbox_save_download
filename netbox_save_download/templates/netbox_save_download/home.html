@@ -1,14 +1,102 @@
 {% extends 'base/layout.html' %}
+{% load buttons %}
+{% load i18n %}
 
 {% block content %}
+<div class="pull-right noprint">
+    {# 这里可以放置顶部操作按钮 #}
+</div>
+
+<h1>{% block title %}配置保存与下载{% endblock %}</h1>
+
 <div class="row">
-    <div class="col col-md-12">
+    <!-- 左侧：输入面板 -->
+    <div class="col col-md-4">
         <div class="card">
-            <h5 class="card-header">设备配置保存与下载</h5>
+            <h5 class="card-header">导入设备清单</h5>
             <div class="card-body">
-                <p>欢迎使用设备配置保存与下载插件。</p>
+                <!-- CSV 上传 -->
+                <form method="post" enctype="multipart/form-data" class="mb-4">
+                    {% csrf_token %}
+                    <label class="form-label">上传 CSV 文件</label>
+                    <input type="file" name="csv_file" class="form-control mb-2" accept=".csv">
+                    <button type="submit" name="action" value="load_csv" class="btn btn-sm btn-outline-primary">
+                        <i class="mdi mdi-file-upload"></i> 加载 CSV
+                    </button>
+                </form>
+
+                <hr>
+
+                <!-- IP 范围输入 -->
+                <form method="post">
+                    {% csrf_token %}
+                    <label class="form-label">输入 IP 地址/范围</label>
+                    <textarea name="ip_input" class="form-control mb-2" rows="5" placeholder="例如:
+192.168.1.1
+192.168.2.0/24
+10.0.0.1-10.0.0.10"></textarea>
+                    <button type="submit" name="action" value="load_ips" class="btn btn-sm btn-outline-primary">
+                        <i class="mdi mdi-magnify-plus"></i> 加载 IP
+                    </button>
+                </form>
             </div>
         </div>
+    </div>
+
+    <!-- 右侧：设备列表与操作 -->
+    <div class="col col-md-8">
+        <form method="post">
+            {% csrf_token %}
+            <div class="card">
+                <h5 class="card-header d-flex justify-content-between align-items-center">
+                    <span>待处理设备清单</span>
+                    <span class="badge bg-info">{{ devices|length }} 台设备</span>
+                </h5>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover object-list">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" class="toggle" title="全选" /></th>
+                                    <th>设备名称</th>
+                                    <th>平台</th>
+                                    <th>主 IP</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for device in devices %}
+                                <tr>
+                                    <td><input type="checkbox" name="pk" value="{{ device.pk }}" /></td>
+                                    <td><a href="{{ device.get_absolute_url }}">{{ device.name }}</a></td>
+                                    <td>{{ device.platform }}</td>
+                                    <td>{{ device.primary_ip.address.ip }}</td>
+                                    <td>
+                                        <a href="{% url 'plugins:netbox_save_download:download_config' pk=device.pk %}" class="btn btn-sm btn-success">
+                                            <i class="mdi mdi-download"></i> 下载
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-muted text-center py-4">
+                                        请先从左侧导入设备或输入 IP。
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% if devices %}
+                <div class="card-footer noprint">
+                    <button type="submit" name="action" value="save" class="btn btn-primary">
+                        <i class="mdi mdi-content-save"></i> 批量执行 Nornir 备份 (并发50)
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}

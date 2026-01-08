@@ -1,0 +1,5 @@
+netmiko
+nornir
+nornir_netmiko
+nornir_utils
+django

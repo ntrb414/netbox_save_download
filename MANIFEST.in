@@ -1,2 +1,4 @@
 include README.md
+include requirements.txt
 recursive-include netbox_save_download/templates *
+recursive-include netbox_save_download/static *
