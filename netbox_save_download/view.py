@@ -39,14 +39,11 @@ class SaveDownloadHomeView(View):
 
         # 3. 根据 IP 查找 NetBox 设备
         if found_ips:
-            # 改进匹配逻辑：
-            # 1. 适配 NetBox 4.x 的 primary_ip4/ip6
-            # 2. 同时支持设备本身定义平台或其型号(DeviceType)定义平台
+            # 优化匹配规则：
+            # 1. 仅使用 primary_ip4 进行匹配
+            # 2. 不对 platform 状态进行任何过滤
             devices = Device.objects.filter(
-                Q(primary_ip4__address__host__in=found_ips) | 
-                Q(primary_ip6__address__host__in=found_ips)
-            ).filter(
-                Q(platform__isnull=False) | Q(device_type__platform__isnull=False)
+                primary_ip4__address__host__in=found_ips
             ).distinct()
             
             if not devices:

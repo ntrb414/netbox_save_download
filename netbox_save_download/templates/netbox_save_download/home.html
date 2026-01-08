@@ -69,8 +69,24 @@
                                 <tr>
                                     <td><input type="checkbox" name="pk" value="{{ device.pk }}" /></td>
                                     <td><a href="{{ device.get_absolute_url }}">{{ device.name }}</a></td>
-                                    <td>{{ device.platform }}</td>
-                                    <td>{{ device.primary_ip.address.ip }}</td>
+                                    <td>
+                                        {% if device.platform %}
+                                            <span class="badge bg-primary">{{ device.platform }}</span>
+                                        {% elif device.device_type.platform %}
+                                            <span class="badge bg-info" title="继承自型号">{{ device.device_type.platform }}</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">未定义平台</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if device.primary_ip4 %}
+                                            {{ device.primary_ip4.address.ip }}
+                                        {% elif device.primary_ip6 %}
+                                            {{ device.primary_ip6.address.ip }}
+                                        {% else %}
+                                            <span class="badge bg-warning">无主IP</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <a href="{% url 'plugins:netbox_save_download:download_config' pk=device.pk %}" class="btn btn-sm btn-success">
                                             <i class="mdi mdi-download"></i> 下载
