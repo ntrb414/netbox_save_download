@@ -39,10 +39,14 @@ class SaveDownloadHomeView(View):
 
         # 3. 根据 IP 查找 NetBox 设备
         if found_ips:
-            # 直接使用 primary_ip4 进行过滤 (NetBox 4.x 不支持 primary_ip 字段名)
+            # 改进匹配逻辑：
+            # 1. 适配 NetBox 4.x 的 primary_ip4/ip6
+            # 2. 同时支持设备本身定义平台或其型号(DeviceType)定义平台
             devices = Device.objects.filter(
-                primary_ip4__address__host__in=found_ips,
-                platform__isnull=False
+                Q(primary_ip4__address__host__in=found_ips) | 
+                Q(primary_ip6__address__host__in=found_ips)
+            ).filter(
+                Q(platform__isnull=False) | Q(device_type__platform__isnull=False)
             ).distinct()
             
             if not devices:
@@ -56,7 +60,7 @@ class SaveDownloadHomeView(View):
             if device_ids:
                 selected_devices = Device.objects.filter(pk__in=device_ids)
                 username = "admin" 
-                password = "password123"
+                password = "admin@123"
                 
                 success, result = run_nornir_backup(selected_devices, username, password)
                 
