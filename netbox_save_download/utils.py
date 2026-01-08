@@ -34,10 +34,12 @@ def run_nornir_backup(devices, username, password):
     }
 
     for device in devices:
-        if not device.primary_ip or not device.platform:
+        # 适配 NetBox 4.x: 优先获取 IPv4，其次 IPv6
+        primary_ip = device.primary_ip4 or device.primary_ip6
+        if not primary_ip or not device.platform:
             continue #跳过没有IP或平台的设备
         hosts[device.name] = {
-            'hostname': str(device.primary_ip.address.ip),
+            'hostname': str(primary_ip.address.ip),
             'username': username,
             'password': password,
             'platform': platform_map.get(device.platform.slug, 'autodetect'),

@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404
 from django.views.generic import View
 from django.contrib import messages
 from django.http import HttpResponse
+from django.db.models import Q
 from dcim.models import Device
 from .utils import run_nornir_backup, parse_ip_input, parse_csv_file
 import os
@@ -38,9 +39,9 @@ class SaveDownloadHomeView(View):
 
         # 3. 根据 IP 查找 NetBox 设备
         if found_ips:
-            # 在 NetBox 中查找主 IP 匹配这些地址的设备
+            # 直接使用 primary_ip4 进行过滤 (NetBox 4.x 不支持 primary_ip 字段名)
             devices = Device.objects.filter(
-                primary_ip__address__host__in=found_ips,
+                primary_ip4__address__host__in=found_ips,
                 platform__isnull=False
             ).distinct()
             

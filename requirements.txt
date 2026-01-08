@@ -3,3 +3,5 @@ nornir
 nornir_netmiko
 nornir_utils
 django
+numpy>=1.26.0,<2.0
+pandas>=2.2.2,<2.3
