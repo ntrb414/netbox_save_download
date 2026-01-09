@@ -1,4 +1,4 @@
-from netbox.plugins import PluginMenuItem, PluginMenuButton
+from netbox.plugins import PluginMenuItem
 
 menu_items = (
     PluginMenuItem(
