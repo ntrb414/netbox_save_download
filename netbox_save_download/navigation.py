@@ -1,15 +1,10 @@
-from netbox.plugins import PluginMenuItem, PluginMenuGroup
+from netbox.plugins import PluginMenuItem
 
 # 定义菜单项
 home_item = PluginMenuItem(
     link="plugins:netbox_save_download:home",
-    link_text="save and download config",
+    link_text="Save and Download Config",
 )
 
-# 定义菜单项组
-menu_items = (
-    PluginMenuGroup(
-        label="config management",
-        items=(home_item,),
-    ),
-)
+# 直接导出 menu_items 元组
+menu_items = (home_item,)
