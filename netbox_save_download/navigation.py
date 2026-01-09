@@ -1,9 +1,8 @@
-from netbox.plugins import PluginMenuItem
+from netbox.plugins import PluginMenuItem, PluginMenuButton
 
 menu_items = (
     PluginMenuItem(
         link="plugins:netbox_save_download:home",
         link_text="Save and Download Config",
-        icon_class="mdi mdi-cloud-download",
     ),
 )

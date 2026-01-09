@@ -7,11 +7,11 @@
 {% block content %}
 <div class="row">
     <div class="col col-md-12">
-        <div class="card">
-            <h5 class="card-header">IP Input</h5>
-            <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
+        <form method="post" id="main-form">
+            {% csrf_token %}
+            <div class="card">
+                <h5 class="card-header">IP Input</h5>
+                <div class="card-body">
                     <div class="mb-3">
                         <label for="ip_input" class="form-label">Enter IP Addresses (Single, CIDR, or Range e.g. 192.168.1.1-50)</label>
                         <textarea name="ip_input" id="ip_input" class="form-control" rows="5" placeholder="192.168.1.1&#10;192.168.2.0/24&#10;10.0.0.1-10.0.0.254">{{ request.POST.ip_input }}</textarea>
@@ -19,13 +19,10 @@
                     <button type="submit" name="action" value="load_ips" class="btn btn-primary">
                         <i class="mdi mdi-filter"></i> Identify IPs
                     </button>
-                </form>
+                </div>
             </div>
-        </div>
 
-        {% if found_ips %}
-        <form method="post">
-            {% csrf_token %}
+            {% if found_ips %}
             {# 保持当前识别到的所有 IP 列表，防止 post 提交时丢失 #}
             {% for ip in found_ips %}
                 <input type="hidden" name="all_found_ips" value="{{ ip }}">
@@ -45,7 +42,11 @@
                         <tbody>
                             {% for ip in found_ips %}
                             <tr>
-                                <td><input type="checkbox" name="selected_ips" value="{{ ip }}" checked class="ip-checkbox" /></td>
+                                <td>
+                                    <input type="checkbox" name="selected_ips" value="{{ ip }}" 
+                                           {% if ip in selected_ips or not selected_ips %}checked{% endif %} 
+                                           class="ip-checkbox" />
+                                </td>
                                 <td>{{ ip }}</td>
                                 <td>
                                     <a href="{% url 'plugins:netbox_save_download:download_config' ip=ip %}" class="btn btn-sm btn-outline-success">
@@ -63,8 +64,8 @@
                     </button>
                 </div>
             </div>
+            {% endif %}
         </form>
-        {% endif %}
     </div>
 </div>
 
