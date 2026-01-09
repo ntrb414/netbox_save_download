@@ -4,13 +4,13 @@ from nornir import InitNornir
 from nornir_netmiko.tasks import netmiko_send_command
 from nornir_utils.plugins.functions import print_result
 from nornir.core.plugins.inventory import InventoryPluginRegister
-from nornir_utils.plugins.inventory import DictInventory, SimpleInventory
+from nornir_utils.plugins.inventory import SimpleInventory
 from django.conf import settings
 import logging
 import yaml
 from datetime import datetime
 
-# 注册插件以支持配置格式
+# 注册 SimpleInventory 插件
 try:
     InventoryPluginRegister.register("SimpleInventory", SimpleInventory)
 except Exception:
