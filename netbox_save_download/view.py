@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.db.models import Q
 from dcim.models import Device
-from .utils import run_nornir_backup, parse_ip_input, parse_csv_file
+from .utils import run_nornir_backup, parse_ip_input
 import os
 
 class SaveDownloadHomeView(View):
@@ -14,22 +14,13 @@ class SaveDownloadHomeView(View):
             'devices': [],
         })
 
-    def post(self, request):
+    def post(self, request): #action为load_ips或save，根据action不同，执行不同的操作
         action = request.POST.get('action')
         devices = []
         found_ips = []
 
-        # 1. 处理 CSV 加载
-        if action == 'load_csv':
-            csv_file = request.FILES.get('csv_file')
-            if csv_file:
-                found_ips = parse_csv_file(csv_file)
-                messages.info(request, f"从 CSV 中识别到 {len(found_ips)} 个 IP 地址")
-            else:
-                messages.error(request, "请先选择要上传的 CSV 文件")
-
-        # 2. 处理 IP 范围输入加载
-        elif action == 'load_ips':
+        # 1. 处理 IP 范围输入加载
+        if action == 'load_ips':
             ip_input = request.POST.get('ip_input')
             if ip_input:
                 found_ips = parse_ip_input(ip_input)
@@ -39,12 +30,13 @@ class SaveDownloadHomeView(View):
 
         # 3. 根据 IP 查找 NetBox 设备
         if found_ips:
-            # 优化匹配规则：
-            # 1. 仅使用 primary_ip4 进行匹配
-            # 2. 不对 platform 状态进行任何过滤
-            devices = Device.objects.filter(
-                primary_ip4__address__host__in=found_ips
-            ).distinct()
+            # 优化匹配规则：使用 Q 对象进行更灵活的匹配
+            # 确保匹配 Primary IPv4 的主机地址部分
+            query = Q()
+            for ip in found_ips:
+                query |= Q(primary_ip4__address__net_host=ip)
+            
+            devices = Device.objects.filter(query).distinct()
             
             if not devices:
                 messages.warning(request, "未在 NetBox 中找到与输入 IP 匹配的设备（且需具备平台定义）")

@@ -1,14 +1,12 @@
 import os
-import csv
 import io
 import ipaddress
 from nornir import InitNornir
 from nornir_netmiko.tasks import netmiko_send_command
 from nornir_utils.plugins.functions import print_result
-from nornir.core.inventory import Inventory
+from nornir.core.inventory import Inventory, Host, Group, Defaults
 import logging
 from datetime import datetime
-import pandas as pd
 
 logger = logging.getLogger('netbox.plugins.netbox_save_download')
 BACKUP_PATH = '/opt/config_download'
@@ -42,21 +40,21 @@ def run_nornir_backup(devices, username, password):
         if not primary_ip or not platform:
             continue #跳过没有IP或平台的设备
 
-        hosts[device.name] = {
-            'hostname': str(primary_ip.address.ip),
-            'username': username,
-            'password': password,
-            'platform': platform_map.get(platform.slug, 'autodetect'),
-        }
+        hosts[device.name] = Host(
+            name=device.name,
+            hostname=str(primary_ip.address.ip),
+            username=username,
+            password=password,
+            platform=platform_map.get(platform.slug, 'autodetect'),
+            groups=[],
+            data={}
+        )
 
-    inventory = {
-        'plugin': 'CSVInventory',
-        'options': {
-            'hosts': hosts,
-            'groups': {},
-            'defaults': {},
-        }
-    }
+    inventory = Inventory(
+        hosts=hosts,
+        groups={},
+        defaults=Defaults()
+    )
 
     # 初始化 Nornir (并发数 50)
     nr = InitNornir(
@@ -144,29 +142,4 @@ def parse_ip_input(ip_text):
         except Exception as e:
             logger.error(f"解析 IP 失败 {line}: {str(e)}")
             continue
-    return list(set(ips))
-
-def parse_csv_file(file_obj):
-    """
-    从上传的 CSV 文件中提取 IP 地址
-    假设 CSV 中有一列名为 'ip' 或第一列即为 IP
-    """
-    ips = []
-    content = file_obj.read().decode('utf-8')
-    reader = csv.DictReader(io.StringIO(content))
-    
-    # 如果有表头且包含 'ip'
-    if 'ip' in reader.fieldnames:
-        for row in reader:
-            if row['ip']:
-                ips.append(row['ip'].strip())
-    else:
-        # 否则读取第一列
-        file_obj.seek(0)
-        content = file_obj.read().decode('utf-8')
-        simple_reader = csv.reader(io.StringIO(content))
-        for row in simple_reader:
-            if row and row[0]:
-                ips.append(row[0].strip())
-    
     return list(set(ips))

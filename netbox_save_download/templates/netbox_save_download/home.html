@@ -15,26 +15,15 @@
         <div class="card">
             <h5 class="card-header">导入设备清单</h5>
             <div class="card-body">
-                <!-- CSV 上传 -->
-                <form method="post" enctype="multipart/form-data" class="mb-4">
-                    {% csrf_token %}
-                    <label class="form-label">上传 CSV 文件</label>
-                    <input type="file" name="csv_file" class="form-control mb-2" accept=".csv">
-                    <button type="submit" name="action" value="load_csv" class="btn btn-sm btn-outline-primary">
-                        <i class="mdi mdi-file-upload"></i> 加载 CSV
-                    </button>
-                </form>
-
-                <hr>
-
                 <!-- IP 范围输入 -->
                 <form method="post">
                     {% csrf_token %}
                     <label class="form-label">输入 IP 地址/范围</label>
-                    <textarea name="ip_input" class="form-control mb-2" rows="5" placeholder="例如:
-192.168.1.1
-192.168.2.0/24
-10.0.0.1-10.0.0.10"></textarea>
+                    <textarea name="ip_input" class="form-control mb-2" rows="10" placeholder="例如:
+                    192.168.1.1
+                    192.168.2.0/24
+                    10.0.0.1-10.0.0.10">
+                    </textarea>
                     <button type="submit" name="action" value="load_ips" class="btn btn-sm btn-outline-primary">
                         <i class="mdi mdi-magnify-plus"></i> 加载 IP
                     </button>
