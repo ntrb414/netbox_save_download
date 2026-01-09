@@ -19,7 +19,6 @@ def run_nornir_backup(devices_data, username, password):
 
     # 平台映射表
     platform_map = {
-        'cisco-ios': 'cisco_ios',
         'huawei-vrp': 'huawei',
         'huawei': 'huawei',
         'h3c': 'hp_comware',
@@ -29,10 +28,7 @@ def run_nornir_backup(devices_data, username, password):
     hosts = {}
     for item in devices_data:
         ip = item['ip']
-        raw_platform = item['platform']
-        
-        # 如果 NetBox 有平台定义则映射，否则使用 autodetect
-        nornir_platform = platform_map.get(raw_platform, 'autodetect') if raw_platform else 'autodetect'
+        nornir_platform = item['platform']
         
         hosts[ip] = {
             "hostname": ip,
@@ -68,27 +64,40 @@ def run_nornir_backup(devices_data, username, password):
 
     nr = InitNornir(inventory=inventory, runner=runner, logging=logging_config)
     def backup_task(task_context):
-        #Nornir 内部任务：保存并抓取配置
+        # Nornir 内部任务：保存并抓取配置
+        platform = task_context.host.platform or ""
+        output = None
         
-        # 1. 执行保存命令
-        if 'cisco' in task_context.host.platform:
-            task_context.run(task=netmiko_send_command, command_string="write memory")
-            output = task_context.run(task=netmiko_send_command, command_string="show running-config")
+        try:
+            # 1. 执行保存和抓取命令
+            if 'huawei' in platform or 'hp' in platform:
+                # 尝试保存，如果失败（例如不需要确认）则继续
+                try:
+                    task_context.run(netmiko_send_command, command_string="save", expect_str="Y/N")
+                    task_context.run(netmiko_send_command, command_string="Y")
+                except Exception:
+                    pass
+                output = task_context.run(task=netmiko_send_command, command_string="display current-configuration")
+            
+            elif platform == 'autodetect' or not platform:
+                # 对于自动检测或未识别平台，尝试通用命令
+                # 这里可以扩展更多逻辑，或者直接报错提示
+                return "平台未识别或不支持自动备份，请在 NetBox 中正确配置设备平台。"
+            else:
+                return f"不支持的平台类型: {platform}"
 
-        elif 'huawei' in task_context.host.platform or 'hp' in task_context.host.platform:
-            task_context.run(netmiko_send_command,"save",expect_str = "Y/N") 
-            task_context.run(netmiko_send_command,"Y") 
-            output = task_context.run(task=netmiko_send_command, command_string="display current-configuration")
-        else:
-            return "不支持的平台"
+            if output and output.result:
+                # 2. 写入本地文件
+                filename = "{}_config.txt".format(task_context.host.hostname)
+                file_path = os.path.join(BACKUP_PATH, filename)
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(output.result)
+                return f"备份成功: {file_path}"
+            else:
+                return "未能获取到配置输出内容"
 
-        # 2. 写入本地文件 (统一命名为 {hostname}_config.txt 以便下载)
-        filename = "{}_config.txt".format(task_context.host.name)
-        file_path = os.path.join(BACKUP_PATH, filename)
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(output.result)
-        
-        return f"备份成功: {file_path}"
+        except Exception as e:
+            return f"备份过程中出错: {str(e)}"
 
     # 执行任务
     try:

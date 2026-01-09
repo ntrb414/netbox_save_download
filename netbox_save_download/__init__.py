@@ -9,7 +9,7 @@ class SaveDownloadConfig(PluginConfig):
     base_url = 'save-download'
     default_settings = {
         'ssh_username': 'admin',
-        'ssh_password': 'password123',
+        'ssh_password': 'admin@123',
         'backup_path': '/opt/config_download',
         'threads': 50,
     }

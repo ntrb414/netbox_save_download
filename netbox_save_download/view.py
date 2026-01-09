@@ -81,8 +81,7 @@ class SaveDownloadHomeView(View):
 
 class DownloadConfigView(View):
     def get(self, request, ip):
-        file_path = f"/opt/config_download/{ip}_config.txt"
-        
+        file_path = "/opt/config_download/{ip}_config.txt"
         if os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
