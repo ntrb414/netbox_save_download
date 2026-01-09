@@ -1,107 +1,79 @@
 {% extends 'base/layout.html' %}
 {% load buttons %}
-{% load i18n %}
+{% load helpers %}
+
+{% block title %}Save and Download Config{% endblock %}
 
 {% block content %}
-<div class="pull-right noprint">
-    {# 这里可以放置顶部操作按钮 #}
-</div>
-
-<h1>{% block title %}配置保存与下载{% endblock %}</h1>
-
 <div class="row">
-    <!-- 左侧：输入面板 -->
-    <div class="col col-md-4">
+    <div class="col col-md-12">
         <div class="card">
-            <h5 class="card-header">导入设备清单</h5>
+            <h5 class="card-header">IP Input</h5>
             <div class="card-body">
-                <!-- IP 范围输入 -->
                 <form method="post">
                     {% csrf_token %}
-                    <label class="form-label">输入 IP 地址/范围</label>
-                    <textarea name="ip_input" class="form-control mb-2" rows="10" placeholder="例如:
-                    192.168.1.1
-                    192.168.2.0/24
-                    10.0.0.1-10.0.0.10">
-                    </textarea>
-                    <button type="submit" name="action" value="load_ips" class="btn btn-sm btn-outline-primary">
-                        <i class="mdi mdi-magnify-plus"></i> 加载 IP
+                    <div class="mb-3">
+                        <label for="ip_input" class="form-label">Enter IP Addresses (Single, CIDR, or Range e.g. 192.168.1.1-50)</label>
+                        <textarea name="ip_input" id="ip_input" class="form-control" rows="5" placeholder="192.168.1.1&#10;192.168.2.0/24&#10;10.0.0.1-10.0.0.254">{{ request.POST.ip_input }}</textarea>
+                    </div>
+                    <button type="submit" name="action" value="load_ips" class="btn btn-primary">
+                        <i class="mdi mdi-filter"></i> Identify IPs
                     </button>
                 </form>
             </div>
         </div>
-    </div>
 
-    <!-- 右侧：设备列表与操作 -->
-    <div class="col col-md-8">
+        {% if found_ips %}
         <form method="post">
             {% csrf_token %}
-            <div class="card">
-                <h5 class="card-header d-flex justify-content-between align-items-center">
-                    <span>待处理设备清单</span>
-                    <span class="badge bg-info">{{ devices|length }} 台设备</span>
-                </h5>
+            {# 保持当前识别到的所有 IP 列表，防止 post 提交时丢失 #}
+            {% for ip in found_ips %}
+                <input type="hidden" name="all_found_ips" value="{{ ip }}">
+            {% endfor %}
+
+            <div class="card mt-3">
+                <h5 class="card-header">Identified IP Addresses ({{ found_ips|length }})</h5>
                 <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover object-list">
-                            <thead>
-                                <tr>
-                                    <th><input type="checkbox" class="toggle" title="全选" /></th>
-                                    <th>设备名称</th>
-                                    <th>平台</th>
-                                    <th>主 IP</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for device in devices %}
-                                <tr>
-                                    <td><input type="checkbox" name="pk" value="{{ device.pk }}" /></td>
-                                    <td><a href="{{ device.get_absolute_url }}">{{ device.name }}</a></td>
-                                    <td>
-                                        {% if device.platform %}
-                                            <span class="badge bg-primary">{{ device.platform }}</span>
-                                        {% elif device.device_type.platform %}
-                                            <span class="badge bg-info" title="继承自型号">{{ device.device_type.platform }}</span>
-                                        {% else %}
-                                            <span class="badge bg-danger">未定义平台</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if device.primary_ip4 %}
-                                            {{ device.primary_ip4.address.ip }}
-                                        {% elif device.primary_ip6 %}
-                                            {{ device.primary_ip6.address.ip }}
-                                        {% else %}
-                                            <span class="badge bg-warning">无主IP</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <a href="{% url 'plugins:netbox_save_download:download_config' pk=device.pk %}" class="btn btn-sm btn-success">
-                                            <i class="mdi mdi-download"></i> 下载
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-muted text-center py-4">
-                                        请先从左侧导入设备或输入 IP。
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" class="toggle" title="Select all" checked onclick="toggleAll(this)" /></th>
+                                <th>IP Address</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ip in found_ips %}
+                            <tr>
+                                <td><input type="checkbox" name="selected_ips" value="{{ ip }}" checked class="ip-checkbox" /></td>
+                                <td>{{ ip }}</td>
+                                <td>
+                                    <a href="{% url 'plugins:netbox_save_download:download_config' ip=ip %}" class="btn btn-sm btn-outline-success">
+                                        <i class="mdi mdi-download"></i> Download Latest
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-                {% if devices %}
-                <div class="card-footer noprint">
-                    <button type="submit" name="action" value="save" class="btn btn-primary">
-                        <i class="mdi mdi-content-save"></i> 批量执行 Nornir 备份 (并发50)
+                <div class="card-footer text-end">
+                    <button type="submit" name="action" value="save" class="btn btn-success">
+                        <i class="mdi mdi-cloud-download"></i> Run Nornir Backup (Selected)
                     </button>
                 </div>
-                {% endif %}
             </div>
         </form>
+        {% endif %}
     </div>
 </div>
+
+<script>
+function toggleAll(source) {
+    checkboxes = document.getElementsByClassName('ip-checkbox');
+    for(var i=0, n=checkboxes.length;i<n;i++) {
+        checkboxes[i].checked = source.checked;
+    }
+}
+</script>
 {% endblock %}

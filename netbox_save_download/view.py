@@ -1,92 +1,78 @@
-from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, redirect
 from django.views.generic import View
 from django.contrib import messages
 from django.http import HttpResponse
-from django.db.models import Q
-from dcim.models import Device
+from ipam.models import IPAddress
 from .utils import run_nornir_backup, parse_ip_input
 import os
 
 class SaveDownloadHomeView(View):
     def get(self, request):
-        # 默认不显示任何设备，等待用户输入
         return render(request, 'netbox_save_download/home.html', {
-            'devices': [],
+            'found_ips': [],
         })
 
-    def post(self, request): #action为load_ips或save，根据action不同，执行不同的操作
+    def post(self, request):
         action = request.POST.get('action')
-        devices = []
-        found_ips = []
+        found_ips = request.POST.getlist('all_found_ips') # 保持当前识别到的 IP 列表
+        selected_ips = request.POST.getlist('selected_ips')
 
-        # 1. 处理 IP 范围输入加载
         if action == 'load_ips':
             ip_input = request.POST.get('ip_input')
             if ip_input:
                 found_ips = parse_ip_input(ip_input)
-                messages.info(request, f"识别到 {len(found_ips)} 个有效 IP 地址")
+                messages.info(request, f"识别到 {len(found_ips)} 个 IP 地址")
             else:
                 messages.error(request, "请输入 IP 地址或范围")
 
-        # 3. 根据 IP 查找 NetBox 设备
-        if found_ips:
-            try:
-                # 优化匹配规则：使用 Q 对象进行更灵活的匹配
-                # 确保匹配 Primary IPv4 的主机地址部分
-                query = Q()
-                for ip in found_ips:
-                    query |= Q(primary_ip4__address__host=ip)
-                
-                devices = Device.objects.filter(query).distinct()
-                
-                if not devices:
-                    messages.warning(request, "未在 NetBox 中找到与输入 IP 匹配的设备（且需具备平台定义）")
-                else:
-                    messages.success(request, f"成功匹配到 {devices.count()} 台 NetBox 设备")
-            except Exception as e:
-                messages.error(request, f"查询设备时出错: {str(e)}")
-                devices = []
-
         elif action == 'save':
-            device_ids = request.POST.getlist('pk')
-            if device_ids:
-                selected_devices = Device.objects.filter(pk__in=device_ids)
+            if selected_ips:
+                devices_data = []
+                for ip in selected_ips:
+                    # 尝试从 NetBox 获取平台信息作为参考
+                    platform_slug = None
+                    try:
+                        ip_obj = IPAddress.objects.filter(address__host=ip).first()
+                        if ip_obj and ip_obj.assigned_object and hasattr(ip_obj.assigned_object, 'platform') and ip_obj.assigned_object.platform:
+                            platform_slug = ip_obj.assigned_object.platform.slug
+                    except Exception:
+                        pass
+                    
+                    devices_data.append({
+                        'ip': ip,
+                        'platform': platform_slug
+                    })
                 
-                # 直接使用硬编码凭据 (根据用户要求不考虑配置化)
                 username = "admin"
                 password = "admin@123"
                 
-                success, result = run_nornir_backup(selected_devices, username, password)
+                success, result = run_nornir_backup(devices_data, username, password)
                 
                 if success:
                     success_count = len(result['success'])
                     if success_count:
-                        messages.success(request, f"Nornir 并发备份成功: {success_count} 台设备。文件已保存至 /opt/config_download")
+                        messages.success(request, f"Nornir 任务完成: 成功 {success_count} 台")
                     for fail_msg in result['fails']:
                         messages.error(request, fail_msg)
                 else:
-                    messages.error(request, f"Nornir 运行出错: {result}")
-                
-                # 重新加载这些设备以保持列表显示
-                devices = selected_devices
+                    messages.error(request, f"Nornir 运行失败: {result}")
             else:
-                messages.error(request, "请先勾选要备份的设备")
+                messages.error(request, "请先勾选要执行任务的 IP")
 
         return render(request, 'netbox_save_download/home.html', {
-            'devices': devices,
+            'found_ips': found_ips,
         })
 
 class DownloadConfigView(View):
-    def get(self, request, pk):
-        device = get_object_or_404(Device, pk=pk)
-        file_path = f"/opt/config_download/{device.name}_config.txt"
+    def get(self, request, ip):
+        file_path = f"/opt/config_download/{ip}_config.txt"
         
         if os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             response = HttpResponse(content, content_type='text/plain')
-            response['Content-Disposition'] = f'attachment; filename="{device.name}_config.txt"'
+            response['Content-Disposition'] = f'attachment; filename="{ip}_config.txt"'
             return response
         else:
-            messages.error(request, f"未找到备份文件，请先执行备份操作。")
+            messages.error(request, f"未找到 IP {ip} 的备份文件。")
             return redirect('plugins:netbox_save_download:home')

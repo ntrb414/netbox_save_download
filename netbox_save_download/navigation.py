@@ -1,4 +1,4 @@
-from netbox.plugins import PluginMenu, PluginMenuItem
+from netbox.plugins import PluginMenuItem, PluginMenuGroup
 
 # 定义菜单项
 home_item = PluginMenuItem(
@@ -6,11 +6,10 @@ home_item = PluginMenuItem(
     link_text="save and download config",
 )
 
-# 定义顶级菜单
-menu = PluginMenu(
-    label="config management",
-    icon_class="mdi mdi-cloud-download",
-    groups=(
-        ("save and download config", (home_item,)),
+# 定义菜单项组
+menu_items = (
+    PluginMenuGroup(
+        label="config management",
+        items=(home_item,),
     ),
 )

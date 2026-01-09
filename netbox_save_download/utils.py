@@ -1,80 +1,70 @@
 import os
 import ipaddress
+import yaml
 from nornir import InitNornir
 from nornir_netmiko.tasks import netmiko_send_command
-from nornir_utils.plugins.functions import print_result
-from nornir.core.plugins.inventory import InventoryPluginRegister
-from nornir_utils.plugins.inventory import SimpleInventory
-from django.conf import settings
-import logging
-import yaml
-from datetime import datetime
 
-# 注册 SimpleInventory 插件
-try:
-    InventoryPluginRegister.register("SimpleInventory", SimpleInventory)
-except Exception:
-    pass
-
-logger = logging.getLogger('netbox.plugins.netbox_save_download')
 BACKUP_PATH = '/opt/config_download'
+INVENTORY_PATH = '/opt/inventory'
 
 # 执行 Nornir 备份任务
-def run_nornir_backup(devices, username, password):
-   # 使用 Nornir 批量执行配置保存并下载
-   # 确保备份目录存在,不存在则创建
-    if not os.path.exists(BACKUP_PATH):
-        try:
-            os.makedirs(BACKUP_PATH)
-        except Exception as e:
-            return False, f"无法创建备份目录: {str(e)}"
+def run_nornir_backup(devices_data, username, password):
+   # 确保必要目录存在
+    for path in [BACKUP_PATH, INVENTORY_PATH]:
+        if not os.path.exists(path):
+            try:
+                os.makedirs(path)
+            except Exception as e:
+                return False, f"无法创建目录 {path}: {str(e)}"
 
-    # 构造 Nornir 静态 Inventory 数据
-    # 将 NetBox 的 Device 对象转换为 Nornir Hosts
-    hosts = {}
+    # 平台映射表
     platform_map = {
         'cisco-ios': 'cisco_ios',
         'huawei-vrp': 'huawei',
         'huawei': 'huawei',
-        }
+        'h3c': 'hp_comware',
+    }
 
-    for device in devices:
-        primary_ip = device.primary_ip4 or device.primary_ip6
-        #优先获取设备自身平台，否则获取设备型号平台
-        platform = device.platform or device.device_type.platform
-
-        if not primary_ip or not platform:
-            continue #跳过没有IP或平台的设备
-
-        hosts[device.name] = {
-            "hostname": str(primary_ip.address.ip),
+    # 构造 Nornir 静态 Inventory 数据
+    hosts = {}
+    for item in devices_data:
+        ip = item['ip']
+        raw_platform = item['platform']
+        
+        # 如果 NetBox 有平台定义则映射，否则使用 autodetect
+        nornir_platform = platform_map.get(raw_platform, 'autodetect') if raw_platform else 'autodetect'
+        
+        hosts[ip] = {
+            "hostname": ip,
             "username": username,
             "password": password,
-            "platform": platform_map.get(platform.slug, 'autodetect'),
+            "platform": nornir_platform,
         }
+    
     # 检查是否有有效设备
     if not hosts:
-        return False, "未找到有效的设备 IP 或平台配置，无法初始化备份任务。"
-    # 写入 hosts.yml
-    with open("/opt/inventory/hosts.yaml", 'w', encoding="utf-8") as f:
-        yaml.dump(hosts, f, allow_unicode=True)
+        return False, "未找到有效的 IP 地址记录，无法初始化备份任务。"
+    # 写入 hosts.yaml
+    hosts_file = os.path.join(INVENTORY_PATH, "hosts.yaml")
+    with open(hosts_file, 'w', encoding="utf-8") as f:
+        yaml.safe_dump(hosts, f, allow_unicode=True, default_flow_style=False)
     
-    # 写入空的 groups.yml 和 defaults.yml 以防止 SimpleInventory 报错
+    # 写入空的 groups.yaml 和 defaults.yaml
     for filename in ['groups.yaml', 'defaults.yaml']:
-        with open(f"/opt/inventory/{filename}", 'w', encoding='utf-8') as f:
+        with open(os.path.join(INVENTORY_PATH, filename), 'w', encoding='utf-8') as f:
             f.write('{}')
 
-    # 初始化 Nornir (采用用户要求的创建格式)
+    # 初始化 Nornir
     inventory = {
         'plugin': 'SimpleInventory',
         'options': {
-            'host_file': '/opt/inventory/hosts.yaml',
-            'group_file': '/opt/inventory/groups.yaml',
-            'defaults_file': '/opt/inventory/defaults.yaml'
+            'host_file': os.path.join(INVENTORY_PATH, 'hosts.yaml'),
+            'group_file': os.path.join(INVENTORY_PATH, 'groups.yaml'),
+            'defaults_file': os.path.join(INVENTORY_PATH, 'defaults.yaml')
         }
     }
     runner = {'plugin': 'threaded', 'options': {'num_workers': 50}}
-    logging_config = {'enabled': True, 'level': 'INFO', 'log_file': '/opt/inventory/nornir.log'}
+    logging_config = {'enabled': True, 'level': 'INFO', 'log_file': os.path.join(INVENTORY_PATH, 'nornir.log')}
 
     nr = InitNornir(inventory=inventory, runner=runner, logging=logging_config)
     def backup_task(task_context):
