@@ -1,4 +1,4 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import View
 from django.contrib import messages
 from django.http import HttpResponse
@@ -30,25 +30,30 @@ class SaveDownloadHomeView(View):
 
         # 3. 根据 IP 查找 NetBox 设备
         if found_ips:
-            # 优化匹配规则：使用 Q 对象进行更灵活的匹配
-            # 确保匹配 Primary IPv4 的主机地址部分
-            query = Q()
-            for ip in found_ips:
-                query |= Q(primary_ip4__address__net_host=ip)
-            
-            devices = Device.objects.filter(query).distinct()
-            
-            if not devices:
-                messages.warning(request, "未在 NetBox 中找到与输入 IP 匹配的设备（且需具备平台定义）")
-            else:
-                messages.success(request, f"成功匹配到 {devices.count()} 台 NetBox 设备")
+            try:
+                # 优化匹配规则：使用 Q 对象进行更灵活的匹配
+                # 确保匹配 Primary IPv4 的主机地址部分
+                query = Q()
+                for ip in found_ips:
+                    query |= Q(primary_ip4__address__host=ip)
+                
+                devices = Device.objects.filter(query).distinct()
+                
+                if not devices:
+                    messages.warning(request, "未在 NetBox 中找到与输入 IP 匹配的设备（且需具备平台定义）")
+                else:
+                    messages.success(request, f"成功匹配到 {devices.count()} 台 NetBox 设备")
+            except Exception as e:
+                messages.error(request, f"查询设备时出错: {str(e)}")
+                devices = []
 
-        # 4. 执行 Nornir 备份操作 (逻辑保持不变，但基于当前显示的 devices)
         elif action == 'save':
             device_ids = request.POST.getlist('pk')
             if device_ids:
                 selected_devices = Device.objects.filter(pk__in=device_ids)
-                username = "admin" 
+                
+                # 直接使用硬编码凭据 (根据用户要求不考虑配置化)
+                username = "admin"
                 password = "admin@123"
                 
                 success, result = run_nornir_backup(selected_devices, username, password)
@@ -84,4 +89,4 @@ class DownloadConfigView(View):
             return response
         else:
             messages.error(request, f"未找到备份文件，请先执行备份操作。")
-            return render(request, 'netbox_save_download/home.html', {'devices': []})
+            return redirect('plugins:netbox_save_download:home')

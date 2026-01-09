@@ -1,5 +1,5 @@
 netmiko
-nornir
+nornir>=3.0.0
 nornir_netmiko
 nornir_utils
 django
