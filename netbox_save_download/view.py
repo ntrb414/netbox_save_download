@@ -54,7 +54,7 @@ class SaveDownloadHomeView(View):
                         })
                     
                     username = "admin"
-                    password = "admin@123"
+                    password = "123456"
                     
                     success, result = run_nornir_backup(devices_data, username, password)
                     
