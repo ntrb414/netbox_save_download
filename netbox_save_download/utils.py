@@ -39,16 +39,22 @@ def run_nornir_backup(selected_devices, username, password):
     # 构造 Nornir 静态 Inventory 数据
     hosts = {}
     for device in selected_devices:
-        # 获取管理 IP
-        ip = str(device.primary_ip4.address.ip) if device.primary_ip4 else None
+        # 兼容字典和对象格式
+        if isinstance(device, dict):
+            name = device.get('name')
+            ip = device.get('ip')
+            platform_slug = device.get('platform_slug', 'generic')
+        else:
+            name = device.name
+            ip = str(device.primary_ip4.address.ip) if device.primary_ip4 else None
+            platform_slug = device.platform.slug if device.platform else 'generic'
+
         if not ip:
             continue
             
-        # 获取平台映射
-        platform_slug = device.platform.slug if device.platform else 'generic'
         nornir_platform = platform_map.get(platform_slug, 'autodetect')
         
-        hosts[device.name] = {
+        hosts[name] = {
             "hostname": ip,
             "username": username,
             "password": password,
