@@ -17,7 +17,7 @@ def get_backup_path():
 # 执行 Nornir 备份任务
 def run_nornir_backup(selected_devices, username, password):
     BACKUP_PATH = get_backup_path()
-    INVENTORY_PATH = '/tmp/nornir_inventory' # 使用临时目录避免权限冲突
+    INVENTORY_PATH = '/tmp/nornir_inventory' # 使用临时目录
 
     # 确保目录存在
     for path in [BACKUP_PATH, INVENTORY_PATH]:
@@ -27,15 +27,6 @@ def run_nornir_backup(selected_devices, username, password):
             except Exception as e:
                 return False, f"无法创建目录 {path}: {str(e)}"
 
-    # 平台映射表 (NetBox Slug -> Netmiko Platform)
-    platform_map = {
-        'huawei-vrp': 'huawei',
-        'huawei': 'huawei',
-        'h3c': 'hp_comware',
-        'cisco-ios': 'cisco_ios',
-        'cisco': 'cisco_ios',
-    }
-
     # 构造 Nornir 静态 Inventory 数据
     hosts = {}
     for device in selected_devices:
@@ -43,16 +34,15 @@ def run_nornir_backup(selected_devices, username, password):
         if isinstance(device, dict):
             name = device.get('name')
             ip = device.get('ip')
-            platform_slug = device.get('platform_slug', 'generic')
         else:
             name = device.name
             ip = str(device.primary_ip4.address.ip) if device.primary_ip4 else None
-            platform_slug = device.platform.slug if device.platform else 'generic'
 
         if not ip:
             continue
             
-        nornir_platform = platform_map.get(platform_slug, 'autodetect')
+        # 强制固定平台为 huawei_vrp
+        nornir_platform = "huawei_vrp"
         
         hosts[name] = {
             "hostname": ip,
@@ -62,7 +52,7 @@ def run_nornir_backup(selected_devices, username, password):
         }
     
     if not hosts:
-        return False, "选中的设备中没有配置主 IPv4 地址，无法备份。"
+        return False, "选中的设备中没有配置有效 IP 地址，无法备份。"
 
     # 写入 Inventory 文件
     hosts_file = os.path.join(INVENTORY_PATH, "hosts.yaml")
@@ -81,29 +71,26 @@ def run_nornir_backup(selected_devices, username, password):
             'defaults_file': os.path.join(INVENTORY_PATH, 'defaults.yaml')
         }
     }
-    nr = InitNornir(inventory=inventory, runner={'plugin': 'threaded', 'options': {'num_workers': 20}})
+    nr = InitNornir(inventory=inventory, runner={'plugin': 'threaded', 'options': {'num_workers': 50}})
 
     def backup_task(task):
-        # 1. 执行备份命令
-        if 'huawei' in task.host.platform or 'hp' in task.host.platform:
-            # 华为/H3C 保存配置
-            try:
-                task.run(netmiko_send_command, command_string="save", expect_str=r"[Y/N]")
-                task.run(netmiko_send_command, command_string="Y")
-            except:
-                pass
-            cmd = "display saved-configuration"
-        elif 'cisco' in task.host.platform:
-            cmd = "show running-config"
-        else:
-            raise Exception(f"暂不支持的平台: {task.host.platform}")
+        # 1. 执行华为/华三特有的保存配置命令
+        try:
+            # 执行 save 命令并响应 Y
+            task.run(netmiko_send_command, command_string="save", expect_str=r"[Y/N]")
+            task.run(netmiko_send_command, command_string="Y")
+        except Exception:
+            # 忽略保存过程中的交互错误（部分设备可能不需要确认）
+            pass
 
+        # 2. 抓取配置
+        cmd = "display saved-configuration"
         result = task.run(netmiko_send_command, command_string=cmd)
         
         if not result.result:
-            raise Exception("未能获取到配置内容")
+            raise Exception("未能获取到配置内容（display saved-configuration 无输出）")
 
-        # 2. 写入文件
+        # 3. 写入文件
         file_path = os.path.join(BACKUP_PATH, f"{task.host.name}_config.txt")
         try:
             with open(file_path, "w", encoding="utf-8") as f:
@@ -120,7 +107,6 @@ def run_nornir_backup(selected_devices, username, password):
     fail_list = []
     for host, result in results.items():
         if result.failed:
-            # 获取底层的错误信息
             err = result[0].result if result[0].result else "未知错误"
             if result[0].exception:
                 err = str(result[0].exception)
@@ -151,7 +137,7 @@ def parse_ip_input(ip_text):
             continue
     return list(set(ips))
 
-# 解析 CSV (简单实现)
+# 解析 CSV
 def parse_csv_file(csv_file):
     import csv
     import io
