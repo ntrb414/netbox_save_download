@@ -6,75 +6,190 @@
 
 {% block content %}
 <div class="row">
-    <div class="col col-md-12">
-        <form method="post" id="main-form">
-            {% csrf_token %}
-            <div class="card">
-                <h5 class="card-header">IP Input</h5>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label for="ip_input" class="form-label">Enter IP Addresses (Single, CIDR, or Range e.g. 192.168.1.1-50)</label>
-                        <textarea name="ip_input" id="ip_input" class="form-control" rows="5" placeholder="192.168.1.1&#10;192.168.2.0/24&#10;10.0.0.1-10.0.0.254">{{ ip_input }}</textarea>
-                    </div>
-                    <button type="submit" name="action" value="load_ips" class="btn btn-primary">
-                        <i class="mdi mdi-filter"></i> Identify IPs
-                    </button>
-                </div>
-            </div>
+  <div class="col col-md-12">
+    <form method="post" id="main-form" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="card">
+        <h5 class="card-header">IP Input</h5>
+        <div class="card-body">
+          <div class="mb-3">
+            <label for="ip_input" class="form-label">Enter IP Addresses (Single, CIDR, or Range e.g. 192.168.1.1-50)</label>
+            <textarea name="ip_input" id="ip_input" class="form-control" rows="5" placeholder="192.168.1.1&#10;192.168.2.0/24&#10;10.0.0.1-10.0.0.254">{{ ip_input }}</textarea>
+          </div>
 
-            {% if found_ips %}
-            {# 保持当前识别到的所有 IP 列表，防止 post 提交时丢失 #}
-            {% for ip in found_ips %}
-                <input type="hidden" name="all_found_ips" value="{{ ip }}">
-            {% endfor %}
-
-            <div class="card mt-3">
-                <h5 class="card-header">Identified IP Addresses ({{ found_ips|length }})</h5>
-                <div class="card-body">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th><input type="checkbox" class="toggle" title="Select all" checked onclick="toggleAll(this)" /></th>
-                                <th>IP Address</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for ip in found_ips %}
-                            <tr>
-                                <td>
-                                    <input type="checkbox" name="selected_ips" value="{{ ip }}" 
-                                           {% if ip in selected_ips or not selected_ips %}checked{% endif %} 
-                                           class="ip-checkbox" />
-                                </td>
-                                <td>{{ ip }}</td>
-                                <td>
-                                    <a href="{% url 'plugins:netbox_save_download:download_config' ip=ip %}" class="btn btn-sm btn-outline-success">
-                                        <i class="mdi mdi-download"></i> Download Latest
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="card-footer text-end">
-                    <button type="submit" name="action" value="save" class="btn btn-success">
-                        <i class="mdi mdi-cloud-download"></i> Run Nornir Backup (Selected)
-                    </button>
-                </div>
+          <!-- 新增：IP 输入文本框与 CSV 上传控件 -->
+          <div class="row g-3 align-items-end mb-3">
+            <div class="col-md-6">
+              <label for="ip_csv_file" class="form-label">Upload CSV</label>
+              <input type="file" id="ip_csv_file" name="ip_csv_file" class="form-control" accept=".csv" />
             </div>
-            {% endif %}
-        </form>
-    </div>
+          </div>
+
+          <button type="submit" name="action" value="load_ips" class="btn btn-primary">
+            <i class="mdi mdi-filter"></i> Identify IPs
+          </button>
+        </div>
+      </div>
+
+      {% if found_ips %}
+      {# 保持当前识别到的所有 IP 列表，防止 post 提交时丢失 #}
+      {% for ip in found_ips %}
+      <input type="hidden" name="all_found_ips" value="{{ ip }}">
+      {% endfor %}
+
+      <div class="card mt-3">
+        <h5 class="card-header">Identified IP Addresses ({{ found_ips|length }})</h5>
+        <div class="card-body">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th><input type="checkbox" class="toggle" title="Select all" checked onclick="toggleAll(this)" /></th>
+                <th>IP Address</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ip in found_ips %}
+              <tr>
+                <td>
+                  <input type="checkbox" name="selected_ips" value="{{ ip }}" 
+                         {% if ip in selected_ips or not selected_ips %}checked{% endif %} 
+                         class="ip-checkbox" />
+                </td>
+                <td>{{ ip }}</td>
+                <td>
+                  <a href="{% url 'plugins:netbox_save_download:download_config' ip=ip %}" class="btn btn-sm btn-outline-success">
+                    <i class="mdi mdi-download"></i> Download Latest
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer text-end">
+          <button type="submit" name="action" value="save" class="btn btn-success">
+            <i class="mdi mdi-cloud-download"></i> Run Nornir Backup (Selected)
+          </button>
+        </div>
+      </div>
+      {% endif %}
+    </form>
+  </div>
 </div>
 
+<!-- 定时任务区域 -->
+<div class="row">
+  <div class="col col-md-12">
+    <div class="card mt-4" id="scheduled-task-area">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span id="scheduled-task-area-title">定时任务区域</span>
+        <span class="badge bg-secondary" id="current-task-name-label">任务栏名称：未命名</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 align-items-end mb-3">
+          <div class="col-md-4">
+            <label class="form-label">任务名</label>
+            <input type="text" id="scheduled_task_name" name="scheduled_task_name" class="form-control" placeholder="输入任务名，例如 Save-IPs-Backup" oninput="updateScheduledPanelTitle()" />
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">IP列表</label>
+            <div id="scheduled_ip_list" class="border rounded p-2" style="max-height:180px; overflow:auto;">
+              <div class="text-muted" id="scheduled_ip_loading">IP 列表加载中，请稍候...</div>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="reload_ip_list_btn" onclick="loadIPsFromFile()">刷新 IP 列表</button>
+            <div class="form-text text-muted mt-1">来源：/opt/save_IPs.txt</div>
+          </div>
+        </div>
+
+        <div class="row g-3 align-items-end mb-3">
+          <div class="col-md-4">
+            <label class="form-label">任务开始执行时间</label>
+            <input type="datetime-local" id="scheduled_start" name="scheduled_start" class="form-control" />
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">执行时间间隔（分钟）</label>
+            <input type="number" id="scheduled_interval" name="scheduled_interval" class="form-control" min="1" />
+          </div>
+          <div class="col-md-4 text-end">
+            <!-- Start 按钮放在最右端，创建新任务 -->
+            <button type="submit" class="btn btn-primary" name="action" value="start_backup">
+              Start
+            </button>
+          </div>
+        </div>
+
+        <div class="row" id="scheduled_task_status" style="display:none;">
+          <div class="col">
+            <div class="alert alert-info" role="alert" id="scheduled-task-status-text">
+              正在创建/运行新任务，请稍后...
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IP 列表加载脚本 -->
 <script>
-function toggleAll(source) {
-    checkboxes = document.getElementsByClassName('ip-checkbox');
-    for(var i=0, n=checkboxes.length;i<n;i++) {
-        checkboxes[i].checked = source.checked;
+(function(){
+  // 全选/取消全选功能
+  window.toggleAll = function(source) {
+    const checkboxes = document.querySelectorAll('.ip-checkbox');
+    for (let i = 0; i < checkboxes.length; i++) {
+      checkboxes[i].checked = source.checked;
     }
-}
+  };
+
+  // 从本地文件读取 IP 列表并渲染为复选框
+  window.loadIPsFromFile = function(){
+    // 修正路径与 urls.py 保持一致
+    fetch('{% url "plugins:netbox_save_download:read_ip_file" %}')
+      .then(function(res){ if(!res.ok) throw new Error('Network response was not ok'); return res.json(); })
+      .then(function(ipList){
+        const container = document.getElementById('scheduled_ip_list');
+        container.innerHTML = '';
+        if (Array.isArray(ipList) && ipList.length){
+          ipList.forEach(function(ip){
+            const label = document.createElement('label');
+            label.className = 'd-block';
+            label.innerHTML = '<input type="checkbox" name="scheduled_task_ips" value="' + ip + '"> ' + ip;
+            container.appendChild(label);
+          });
+        } else {
+          container.innerHTML = '<div class="text-muted">未获取到 IP 列表，请确认 /opt/save_IPs.txt 文件存在且可读取。</div>';
+        }
+        const loading = document.getElementById('scheduled_ip_loading');
+        if (loading) loading.style.display = 'none';
+      })
+      .catch(function(){
+        const container = document.getElementById('scheduled_ip_list');
+        container.innerHTML = '<div class="text-muted">加载失败，请手动刷新。</div>';
+        const loading = document.getElementById('scheduled_ip_loading');
+        if (loading) loading.style.display = 'none';
+      });
+  };
+
+  // 更新任务栏名字显示
+  window.updateScheduledPanelTitle = function(){
+    const name = document.getElementById('scheduled_task_name').value || '未命名';
+    const title = document.getElementById('scheduled-task-area-title');
+    const label = document.getElementById('current-task-name-label');
+    if (title) title.textContent = '定时任务区域 - ' + name;
+    if (label) label.textContent = '任务栏名称：' + name;
+  };
+
+  // 初始加载
+  document.addEventListener('DOMContentLoaded', function(){
+    // 尝试加载 IP 列表
+    loadIPsFromFile();
+    // 初始化任务名称显示
+    updateScheduledPanelTitle();
+  });
+
+})();
 </script>
+
 {% endblock %}

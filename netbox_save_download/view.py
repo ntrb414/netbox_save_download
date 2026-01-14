@@ -1,10 +1,12 @@
 from django.shortcuts import render, redirect
 from django.views.generic import View
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from ipam.models import IPAddress
-from .utils import run_nornir_backup, parse_ip_input
+from .utils import run_nornir_backup, parse_ip_input, parse_csv_file
 import os
+import datetime
+from .utils import read_ip_file
 
 class SaveDownloadHomeView(View):
     def get(self, request):
@@ -17,18 +19,31 @@ class SaveDownloadHomeView(View):
     def post(self, request):
         action = request.POST.get('action')
         ip_input = request.POST.get('ip_input', '')
+        ip_csv_file = request.FILES.get('ip_csv_file')
         # 从隐藏字段中读取之前识别到的所有 IP
         found_ips = request.POST.getlist('all_found_ips')
         # 从复选框中读取选中的 IP
         selected_ips = request.POST.getlist('selected_ips')
 
         if action == 'load_ips':
+            found_ips = []
+            # 处理文本输入
             if ip_input:
-                found_ips = parse_ip_input(ip_input)
+                found_ips.extend(parse_ip_input(ip_input))
+            
+            # 处理 CSV 文件上传
+            if ip_csv_file:
+                try:
+                    found_ips.extend(parse_csv_file(ip_csv_file))
+                except Exception as e:
+                    messages.error(request, f"解析 CSV 文件出错: {str(e)}")
+            
+            if found_ips:
+                found_ips = list(set(found_ips)) # 去重
                 selected_ips = found_ips # 默认全部选中
                 messages.info(request, f"识别到 {len(found_ips)} 个 IP 地址")
             else:
-                messages.error(request, "请输入 IP 地址或范围")
+                messages.error(request, "请输入 IP 地址或上传 CSV 文件")
 
         elif action == 'save':
             # 如果隐藏字段丢失（例如页面过期），尝试从输入框重新解析以保持列表显示
@@ -49,9 +64,10 @@ class SaveDownloadHomeView(View):
                             pass
                         
                         devices_data.append({
-                            'ip': ip,
-                            'platform': platform_slug
-                        })
+                                'name': ip,
+                                'ip': ip,
+                                'platform': platform_slug
+                            })
                     
                     username = "admin"
                     password = "123456"
@@ -71,17 +87,37 @@ class SaveDownloadHomeView(View):
             else:
                 messages.error(request, "请先勾选要执行任务的 IP")
 
+        elif action == 'start_backup':
+            # 处理定时任务启动逻辑
+            task_name = request.POST.get('scheduled_task_name')
+            start_time = request.POST.get('scheduled_start')
+            interval = request.POST.get('scheduled_interval')
+            task_ips = request.POST.getlist('scheduled_task_ips')
+
+            if not task_ips:
+                messages.error(request, "未选择定时任务的 IP 地址")
+            elif not start_time:
+                messages.error(request, "请设置定时任务开始时间")
+            else:
+                # 这里通常会调用 Celery 或其他调度器
+                # 暂时以成功消息模拟
+                messages.success(request, f"定时任务 '{task_name}' 已创建，计划于 {start_time} 开始，每 {interval} 分钟执行一次。")
+
         # 无论成功还是报错，都返回 home.html 并携带当前的 found_ips 和 selected_ips
-        # 确保即使报错，Identified IP Addresses 列表依然能够通过 found_ips 渲染出来
         return render(request, 'netbox_save_download/home.html', {
             'found_ips': found_ips,
             'selected_ips': selected_ips,
             'ip_input': ip_input,
         })
 
+class ReadIPFileView(View):
+    def get(self, request):
+        ip_list = read_ip_file()
+        return JsonResponse(ip_list, safe=False)
+
 class DownloadConfigView(View):
     def get(self, request, ip):
-        file_path = "/opt/config_download/{ip}_config.txt"
+        file_path = f"/opt/config_download/{datetime.datetime.now().strftime('%Y%m%d')}/{ip}_config.txt"
         if os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()

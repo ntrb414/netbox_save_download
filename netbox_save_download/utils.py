@@ -13,11 +13,31 @@ def get_backup_path():
     plugin_config = settings.PLUGINS_CONFIG.get('netbox_save_download', {})
     path = plugin_config.get('backup_path', '/opt/config_download')
     return path
+#从文件中读取IP列表
+def read_ip_file():
+    ip_list=[]
+    try:
+        # 统一路径为 /opt/save_IPs.txt，与前端 home.html 保持一致
+        file_path = '/opt/save_IPs.txt'
+        if not os.path.exists(file_path):
+            # 兼容旧路径
+            file_path = '/opt/config_download/save_IPs.txt'
+            
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as file:
+                for line in file:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        ip_list.append(line)
+    except Exception as e:
+        logger.error(f"读取 IP 文件时出错: {str(e)}")
+        return []
+    return ip_list
 
 # 执行 Nornir 备份任务
 def run_nornir_backup(selected_devices, username, password):
     BACKUP_PATH = get_backup_path()
-    INVENTORY_PATH = '/tmp/nornir_inventory' # 使用临时目录
+    INVENTORY_PATH = '/opt/inventory' 
 
     # 确保目录存在
     for path in [BACKUP_PATH, INVENTORY_PATH]:
