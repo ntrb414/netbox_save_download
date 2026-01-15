@@ -10,7 +10,6 @@ scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(20)})
 scheduler.start()
 
 def schedule_backup_task(task: ScheduledTask, username="admin", password="admin@123"):
-    # 修复字段名错误: task.ip_json 而不是 task.ips_json
     ips = json.loads(task.ip_json) if task.ip_json else []
     if not ips:
         return
