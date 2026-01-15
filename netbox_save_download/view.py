@@ -13,10 +13,12 @@ import json
 
 class SaveDownloadHomeView(View):
     def get(self, request):
+        tasks = ScheduledTask.objects.all().order_by('-start_run_time')
         return render(request, 'netbox_save_download/home.html', {
             'found_ips': [],
             'selected_ips': [],
             'ip_input': '',
+            'tasks': tasks,
         })
     def post(self, request):
         action = request.POST.get('action')
@@ -153,12 +155,28 @@ class SaveDownloadHomeView(View):
             except Exception as e:
                 messages.error(request, f"创建定时任务失败: {str(e)}")
 
+        elif action == 'delete_task':
+            task_id = request.POST.get('task_db_id')
+            try:
+                task = ScheduledTask.objects.get(id=task_id)
+                # 1. 从调度器移除
+                remove_scheduled_backup(task.task_id)
+                # 2. 从数据库移除
+                task_name = task.name
+                task.delete()
+                messages.success(request, f"定时任务 '{task_name}' 已成功删除。")
+            except ScheduledTask.DoesNotExist:
+                messages.error(request, "任务不存在，可能已被删除。")
+            except Exception as e:
+                messages.error(request, f"删除任务失败: {str(e)}")
 
         # 无论成功还是报错，都返回 home.html 并携带当前的 found_ips 和 selected_ips
+        tasks = ScheduledTask.objects.all().order_by('-start_run_time')
         return render(request, 'netbox_save_download/home.html', {
             'found_ips': found_ips,
             'selected_ips': selected_ips,
             'ip_input': ip_input,
+            'tasks': tasks,
         })
 
 class ReadIPFileView(View):

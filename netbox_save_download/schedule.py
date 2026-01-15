@@ -10,14 +10,14 @@ scheduler = BackgroundScheduler(executors={'default': ThreadPoolExecutor(20)})
 scheduler.start()
 
 def schedule_backup_task(task: ScheduledTask, username="admin", password="admin@123"):
-    ips = json.loads(task.ips_json) if task.ips_json else []
+    ips = json.loads(task.ip_json) if task.ip_json else []
     if not ips:
         return
 
     def job():
         # 构造设备输入数据
-        devices = [{ 'ip': ip } for ip in ips]
-        run_nornir_backup(devices, username, password)
+        device_ip = [{ 'ip': ip } for ip in ips]
+        run_nornir_backup(device_ip, username, password)
 
     # 从 start_run_time 开始，以 interval 分钟为间隔循环执行
     scheduler.add_job(
