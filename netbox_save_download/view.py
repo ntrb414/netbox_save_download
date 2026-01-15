@@ -5,8 +5,11 @@ from django.http import HttpResponse, JsonResponse
 from ipam.models import IPAddress
 from .utils import run_nornir_backup, parse_ip_input, parse_csv_file
 import os
-import datetime
-from .utils import read_ip_file
+import datetime 
+from .utils import read_ip_file 
+from .models import ScheduledTask
+from .schedule import schedule_backup_task, remove_scheduled_backup
+import json
 
 class SaveDownloadHomeView(View):
     def get(self, request):
@@ -15,7 +18,6 @@ class SaveDownloadHomeView(View):
             'selected_ips': [],
             'ip_input': '',
         })
-
     def post(self, request):
         action = request.POST.get('action')
         ip_input = request.POST.get('ip_input', '')
@@ -27,10 +29,24 @@ class SaveDownloadHomeView(View):
 
         if action == 'load_ips':
             found_ips = []
-            # 处理文本输入
             if ip_input:
-                found_ips.extend(parse_ip_input(ip_input))
+            # 1. 解析输入
+                parsed_ips = parse_ip_input(ip_input)
             
+            # 2. 读取文件现有内容用于查重
+                existing_ips = set()
+                if os.path.exists('/opt/save_IPs.txt'):
+                    with open('/opt/save_IPs.txt', 'r', encoding='utf-8') as f:
+                        existing_ips = {line.strip() for line in f}
+            
+            # 3. 过滤并写入新 IP
+                new_ips = [ip for ip in parsed_ips if ip not in existing_ips]
+                if new_ips:
+                    with open('/opt/save_IPs.txt', 'a', encoding='utf-8') as f:
+                        for ip in new_ips:
+                            f.write(ip + '\n')
+            
+                found_ips = parsed_ips # 返回给前端显示
             # 处理 CSV 文件上传
             if ip_csv_file:
                 try:
@@ -88,20 +104,31 @@ class SaveDownloadHomeView(View):
                 messages.error(request, "请先勾选要执行任务的 IP")
 
         elif action == 'start_backup':
-            # 处理定时任务启动逻辑
-            task_name = request.POST.get('scheduled_task_name')
-            start_time = request.POST.get('scheduled_start')
-            interval = request.POST.get('scheduled_interval')
-            task_ips = request.POST.getlist('scheduled_task_ips')
+            # 从表单传递数据中，收集定时任务参数，
+            name = request.POST.get('scheduled_task_name')
+            start_run_time = request.POST.get('scheduled_start')
+            interval = int(request.POST.get('scheduled_interval'))
+            ips = request.POST.getlist('scheduled_task_ips')
+            #任务开始时间获得和格式化，若没有，则默认当前时间为开始时间
+            try:
+                start_run_time = datetime.datetime.strptime(start_run_time, '%Y-%m-%d %H:%M')
+            except Exception :
+                start_run_time = datetime.datetime.now()
+            
+            if not ips:
+                messages.error(request, "未选择定时任务的 IP 地址,将从文件save_IPs.txt读取IP作为任务目标IP")
+                ips = read_ip_file()
+            #创建定时任务
+            task = ScheduledTask.objects.create(
+                name=name,
+                ip_json=json.dumps(ips),
+                interval=interval,
+                start_run_time=start_run_time
+            )
+            #注册任务到调度器
+            schedule_backup_task(task)
+            messages.success(request, f"定时任务 '{name}' 已创建,任务ID为{task.task_id},计划于 {start_run_time} 开始,每 {interval} 分钟执行一次。")
 
-            if not task_ips:
-                messages.error(request, "未选择定时任务的 IP 地址")
-            elif not start_time:
-                messages.error(request, "请设置定时任务开始时间")
-            else:
-                # 这里通常会调用 Celery 或其他调度器
-                # 暂时以成功消息模拟
-                messages.success(request, f"定时任务 '{task_name}' 已创建，计划于 {start_time} 开始，每 {interval} 分钟执行一次。")
 
         # 无论成功还是报错，都返回 home.html 并携带当前的 found_ips 和 selected_ips
         return render(request, 'netbox_save_download/home.html', {
@@ -127,3 +154,4 @@ class DownloadConfigView(View):
         else:
             messages.error(request, f"未找到 IP {ip} 的备份文件。")
             return redirect('plugins:netbox_save_download:home')
+

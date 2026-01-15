@@ -13,7 +13,7 @@ def get_backup_path():
     plugin_config = settings.PLUGINS_CONFIG.get('netbox_save_download', {})
     path = plugin_config.get('backup_path', '/opt/config_download')
     return path
-#从文件中读取IP列表
+#从文件中读取IP,IP使用列表存储
 def read_ip_file():
     ip_list=[]
     try:
