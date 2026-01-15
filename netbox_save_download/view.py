@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect
+from django.urls import reverse
 from django.views.generic import View
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
@@ -151,6 +152,8 @@ class SaveDownloadHomeView(View):
                 schedule_backup_task(task)
                 
                 messages.success(request, f"定时任务 '{name}' 已成功创建并启动！开始时间: {start_run_time}")
+                # 修复：创建成功后重定向到 GET 页面，防止刷新重复创建
+                return redirect(reverse('plugins:netbox_save_download:home'))
 
             except Exception as e:
                 messages.error(request, f"创建定时任务失败: {str(e)}")
@@ -165,6 +168,8 @@ class SaveDownloadHomeView(View):
                 task_name = task.name
                 task.delete()
                 messages.success(request, f"定时任务 '{task_name}' 已成功删除。")
+                # 修复：删除成功后重定向
+                return redirect(reverse('plugins:netbox_save_download:home'))
             except ScheduledTask.DoesNotExist:
                 messages.error(request, "任务不存在，可能已被删除。")
             except Exception as e:
