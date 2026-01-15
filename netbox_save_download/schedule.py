@@ -15,20 +15,22 @@ def schedule_backup_task(task: ScheduledTask, username="admin", password="admin@
         return
 
     def job():
-        # 1. 构造设备输入数据
-        devices = [{ 'name': ip, 'ip': ip } for ip in ips]
-        # 2. 执行备份
-        run_nornir_backup(devices, username, password)
-        # 3. 更新下一次运行时间到数据库，以便前端显示
+        # 1. 立即更新下一次运行时间到数据库 (任务开始时就更新，给用户即时反馈)
         try:
-            # 重新从数据库获取最新的任务对象
             current_task = ScheduledTask.objects.get(id=task.id)
             current_job = scheduler.get_job(str(current_task.task_id))
             if current_job:
                 current_task.next_run_time = current_job.next_run_time
                 current_task.save()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Update next_run_time failed: {e}")
+
+        # 2. 构造设备输入数据并执行备份
+        try:
+            devices = [{ 'name': ip, 'ip': ip } for ip in ips]
+            run_nornir_backup(devices, username, password)
+        except Exception as e:
+            print(f"Run backup failed: {e}")
 
     # 从 start_run_time 开始，以 interval 分钟为间隔循环执行
     job_instance = scheduler.add_job(
