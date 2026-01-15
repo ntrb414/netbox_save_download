@@ -104,30 +104,54 @@ class SaveDownloadHomeView(View):
                 messages.error(request, "请先勾选要执行任务的 IP")
 
         elif action == 'start_backup':
-            # 从表单传递数据中，收集定时任务参数，
+            # 从表单传递数据中，收集定时任务参数
             name = request.POST.get('scheduled_task_name')
-            start_run_time = request.POST.get('scheduled_start')
-            interval = int(request.POST.get('scheduled_interval'))
+            start_run_time_str = request.POST.get('scheduled_start')
+            interval_str = request.POST.get('scheduled_interval')
             ips = request.POST.getlist('scheduled_task_ips')
-            #任务开始时间获得和格式化，若没有，则默认当前时间为开始时间
+
             try:
-                start_run_time = datetime.datetime.strptime(start_run_time, '%Y-%m-%d %H:%M')
-            except Exception :
-                start_run_time = datetime.datetime.now()
-            
-            if not ips:
-                messages.error(request, "未选择定时任务的 IP 地址,将从文件save_IPs.txt读取IP作为任务目标IP")
-                ips = read_ip_file()
-            #创建定时任务
-            task = ScheduledTask.objects.create(
-                name=name,
-                ip_json=json.dumps(ips),
-                interval=interval,
-                start_run_time=start_run_time
-            )
-            #注册任务到调度器
-            schedule_backup_task(task)
-            messages.success(request, f"定时任务 '{name}' 已创建,任务ID为{task.task_id},计划于 {start_run_time} 开始,每 {interval} 分钟执行一次。")
+                # 1. 校验必填字段
+                if not name or not interval_str:
+                    raise ValueError("任务名称和执行间隔为必填项")
+                
+                interval = int(interval_str)
+
+                # 2. 解析时间 (兼容浏览器可能发送的 'T' 分隔符)
+                if start_run_time_str:
+                    # 替换 T 为空格以匹配 strptime 格式，或者尝试多种格式
+                    start_run_time_str = start_run_time_str.replace('T', ' ')
+                    try:
+                        start_run_time = datetime.datetime.strptime(start_run_time_str, '%Y-%m-%d %H:%M')
+                    except ValueError:
+                        # 尝试带秒的格式
+                        start_run_time = datetime.datetime.strptime(start_run_time_str, '%Y-%m-%d %H:%M:%S')
+                else:
+                    start_run_time = datetime.datetime.now()
+
+                # 3. 处理 IP 列表
+                if not ips:
+                    messages.warning(request, "未选择 IP 地址，将从 /opt/save_IPs.txt 读取")
+                    ips = read_ip_file()
+                
+                if not ips:
+                    raise ValueError("无可用的 IP 地址来创建任务")
+
+                # 4. 创建定时任务模型
+                task = ScheduledTask.objects.create(
+                    name=name,
+                    ip_json=json.dumps(ips),
+                    interval=interval,
+                    start_run_time=start_run_time
+                )
+
+                # 5. 注册到调度器 (APScheduler)
+                schedule_backup_task(task)
+                
+                messages.success(request, f"定时任务 '{name}' 已成功创建并启动！开始时间: {start_run_time}")
+
+            except Exception as e:
+                messages.error(request, f"创建定时任务失败: {str(e)}")
 
 
         # 无论成功还是报错，都返回 home.html 并携带当前的 found_ips 和 selected_ips

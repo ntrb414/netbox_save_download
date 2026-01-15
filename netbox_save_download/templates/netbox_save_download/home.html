@@ -81,54 +81,57 @@
 <!-- 定时任务区域 -->
 <div class="row">
   <div class="col col-md-12">
-    <div class="card mt-4" id="scheduled-task-area">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span id="scheduled-task-area-title">定时任务区域</span>
-        <span class="badge bg-secondary" id="current-task-name-label">任务栏名称：未命名</span>
-      </div>
-      <div class="card-body">
-        <div class="row g-3 align-items-end mb-3">
-          <div class="col-md-4">
-            <label class="form-label">任务名</label>
-            <input type="text" id="scheduled_task_name" name="scheduled_task_name" class="form-control" placeholder="输入任务名，例如 Save-IPs-Backup" oninput="updateScheduledPanelTitle()" />
-          </div>
-          <div class="col-md-8">
-            <label class="form-label">IP列表</label>
-            <div id="scheduled_ip_list" class="border rounded p-2" style="max-height:180px; overflow:auto;">
-              <div class="text-muted" id="scheduled_ip_loading">IP 列表加载中，请稍候...</div>
+    <form method="post" id="scheduled-form">
+      {% csrf_token %}
+      <div class="card mt-4" id="scheduled-task-area">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span id="scheduled-task-area-title">定时任务区域</span>
+          <span class="badge bg-secondary" id="current-task-name-label">任务栏名称：未命名</span>
+        </div>
+        <div class="card-body">
+          <div class="row g-3 align-items-end mb-3">
+            <div class="col-md-4">
+              <label class="form-label">任务名</label>
+              <input type="text" id="scheduled_task_name" name="scheduled_task_name" class="form-control" placeholder="输入任务名，例如 Save-IPs-Backup" oninput="updateScheduledPanelTitle()" required />
             </div>
-            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="reload_ip_list_btn" onclick="loadIPsFromFile()">刷新 IP 列表</button>
-            <div class="form-text text-muted mt-1">来源：/opt/save_IPs.txt</div>
-          </div>
-        </div>
-
-        <div class="row g-3 align-items-end mb-3">
-          <div class="col-md-4">
-            <label class="form-label">任务开始执行时间</label>
-            <input type="datetime-local" id="scheduled_start" name="scheduled_start" class="form-control" />
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">执行时间间隔（分钟）</label>
-            <input type="number" id="scheduled_interval" name="scheduled_interval" class="form-control" min="1" />
-          </div>
-          <div class="col-md-4 text-end">
-            <!-- Start 按钮放在最右端，创建新任务 -->
-            <button type="submit" class="btn btn-primary" name="action" value="start_backup">
-              Start
-            </button>
-          </div>
-        </div>
-
-        <div class="row" id="scheduled_task_status" style="display:none;">
-          <div class="col">
-            <div class="alert alert-info" role="alert" id="scheduled-task-status-text">
-              正在创建/运行新任务，请稍后...
+            <div class="col-md-8">
+              <label class="form-label">IP列表</label>
+              <div id="scheduled_ip_list" class="border rounded p-2" style="max-height:180px; overflow:auto;">
+                <div class="text-muted" id="scheduled_ip_loading">IP 列表加载中，请稍候...</div>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="reload_ip_list_btn" onclick="loadIPsFromFile()">刷新 IP 列表</button>
+              <div class="form-text text-muted mt-1">来源：/opt/save_IPs.txt</div>
             </div>
           </div>
-        </div>
 
+          <div class="row g-3 align-items-end mb-3">
+            <div class="col-md-4">
+              <label class="form-label">任务开始执行时间</label>
+              <input type="datetime-local" id="scheduled_start" name="scheduled_start" class="form-control" required />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">执行时间间隔（分钟）</label>
+              <input type="number" id="scheduled_interval" name="scheduled_interval" class="form-control" min="1" required />
+            </div>
+            <div class="col-md-4 text-end">
+              <!-- Start 按钮放在最右端，创建新任务 -->
+              <button type="submit" class="btn btn-primary" name="action" value="start_backup">
+                Start
+              </button>
+            </div>
+          </div>
+
+          <div class="row" id="scheduled_task_status" style="display:none;">
+            <div class="col">
+              <div class="alert alert-info" role="alert" id="scheduled-task-status-text">
+                正在创建/运行新任务，请稍后...
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
-    </div>
+    </form>
   </div>
 </div>
 

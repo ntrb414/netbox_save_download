@@ -24,7 +24,7 @@ def schedule_backup_task(task: ScheduledTask, username="admin", password="admin@
         job,
         'interval',
         minutes=task.interval,
-        start_date=task.start_time,
+        start_date=task.start_run_time,
         id=str(task.task_id),
         replace_existing=True
     )
